@@ -96,9 +96,9 @@ mkdir -p /var/db/samba4/winbindd_privileged
 chown -R :proxy /var/db/samba4/winbindd_privileged
 chmod -R 0750 /var/db/samba4/winbindd_privileged
 
-fetch -o /usr/local/pkg/samba.inc -q /root/samba.inc
-fetch -o /usr/local/pkg/samba.xml -q /root/samba.xml
-fetch -o /usr/local/www/diag_samba.php -q /root/diag_samba.php
+fetch -o /usr/local/pkg/samba.inc -q "https://raw.githubusercontent.com/Altemon/ok/main/samba.inc"
+fetch -o /usr/local/pkg/samba.xml -q "https://raw.githubusercontent.com/Altemon/ok/main/samba.xml"
+fetch -o /usr/local/www/diag_samba.php -q "https://raw.githubusercontent.com/Altemon/ok/main/diag_samba.php"
 
 /usr/local/sbin/pfSsh.php <<EOF
 \$samba = false;
@@ -146,7 +146,7 @@ fi
 
 cd /usr/local/pkg
 if [ "$(cat squid.inc squid_auth.xml squid_js.inc | md5)" != "056e6b351429bcd40aea82b78a3c8ded" ]; then
-    fetch -o - -q /root/samba4-squid.diff | patch -s -p0
+    fetch -o - -q "https://raw.githubusercontent.com/Altemon/ok/main/samba4-squid.diff" | patch -s -p0
 fi
 
 if [ ! -f "/usr/local/etc/smb4.conf" ]; then
