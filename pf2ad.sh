@@ -1,7 +1,7 @@
 #!/bin/sh
 
 VERSION='20210222006'
-SQUID_VERSION="0.4.45_3"
+SQUID_VERSION="0.4.45_5"
 
 if [ -f "/etc/samba.patch.version" ]; then
     if [ "$(cat /etc/samba.patch.version)" = "$VERSION" ]; then
@@ -96,9 +96,9 @@ mkdir -p /var/db/samba4/winbindd_privileged
 chown -R :proxy /var/db/samba4/winbindd_privileged
 chmod -R 0750 /var/db/samba4/winbindd_privileged
 
-fetch -o /usr/local/pkg/samba.inc -q "https://raw.githubusercontent.com/Altemon/ok/main/samba.inc"
-fetch -o /usr/local/pkg/samba.xml -q "https://raw.githubusercontent.com/Altemon/ok/main/samba.xml"
-fetch -o /usr/local/www/diag_samba.php -q "https://raw.githubusercontent.com/Altemon/ok/main/diag_samba.php"
+fetch -o /usr/local/pkg/samba.inc -q "https://raw.githubusercontent.com/Altemon/ok/main/samba.inc" > samba.inc
+fetch -o /usr/local/pkg/samba.xml -q "https://raw.githubusercontent.com/Altemon/ok/main/samba.xml" > samba.xml
+fetch -o /usr/local/www/diag_samba.php -q "https://raw.githubusercontent.com/Altemon/ok/main/diag_samba.php" > diag_samba.php
 
 /usr/local/sbin/pfSsh.php <<EOF
 \$samba = false;
