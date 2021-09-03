@@ -1,0 +1,172 @@
+diff --git a/squid.inc b/squid.inc
+index 0c62f90..1d87163 100644
+--- squid.inc
++++ squid.inc
+@@ -1132,7 +1132,7 @@ function squid_validate_auth($post, &$input_errors) {
+ 	unset($num_fields);
+ 
+ 	$auth_method = $post['auth_method'];
+-	if (($auth_method != 'none') && ($auth_method != 'local') && ($auth_method != 'cp')) {
++	if (($auth_method != 'none') && ($auth_method != 'local') && ($auth_method != 'cp') && ($auth_method != 'ntlm')) {
+ 		$server = trim($post['auth_server']);
+ 		if (empty($server)) {
+ 			$input_errors[] = "'Authentication server' is required.";
+@@ -2072,6 +2072,29 @@ function squid_resync_auth() {
+ 				$conf .= "external_acl_type check_cp {$helpers_num} ttl={$auth_ttl} %SRC " . SQUID_BASE . "/bin/check_ip.php\n";
+ 				$conf .= "acl password external check_cp\n";
+ 				break;
++			case 'ntlm':
++				if ($settings['ntlmssp'] == 'on') {
++					$samba_setting = $config['installedpackages']['samba']['config'][0];
++					$no_krb_cache = (isset($samba_setting['no_krb_cache']) && $samba_setting['no_krb_cache'] == 'on') ? ' -t none' : '';
++					$domain_samba4 = (($settings['ntlm_domain'] <> "") ? "--domain={$settings['ntlm_domain']} " : "");
++					$ntlm_proc = (isset($settings['ntlm_proc']) ? "{$settings['ntlm_proc']}" : "20");
++					$conf .= "auth_param negotiate program ". SQUID_LOCALBASE . "/libexec/squid/negotiate_wrapper_auth --ntlm ". SQUID_LOCALBASE ."/libexec/squid/ntlm_auth ". $domain_samba4 ."--helper-protocol=squid-2.5-ntlmssp --kerberos ". SQUID_LOCALBASE ."/libexec/squid/negotiate_kerberos_auth -s GSS_C_NO_NAME" . $no_krb_cache ."\n";
++					$conf .= "auth_param negotiate children {$ntlm_proc}\n";
++					$conf .= "auth_param negotiate keep_alive off\n";
++					$conf .= "# Pure NTLM\n";
++					$conf .= "auth_param ntlm program ". SQUID_LOCALBASE . "/libexec/squid/ntlm_auth " . $domain_samba4 . "--helper-protocol=squid-2.5-ntlmssp\n";
++					$conf .= "auth_param ntlm children {$ntlm_proc}\n";
++					$conf .= "auth_param ntlm keep_alive off\n";
++				}
++				$samba_conf = $config['installedpackages']['samba']['config'][0];
++				exec('/usr/local/bin/net ads info | /usr/bin/grep "Bind Path"', $saida0);
++				$bind_ad = strtolower(preg_split('/: /', $saida0[0])[1]);
++				exec('/usr/local/bin/net ads info | /usr/bin/grep "LDAP server name"', $saida1);
++				$bind_server = strtolower(preg_split('/: /', $saida1[0])[1]);
++				$conf .= "auth_param basic program " . SQUID_LOCALBASE . "/libexec/squid/basic_ldap_auth -b \"" . $bind_ad ."\" -D \"". $samba_conf['member_username'] ."@". $samba_conf['member_domain'] ."\" -w \"". $samba_conf['member_password'] ."\" -f sAMAccountName=%s -h ". $bind_server ."\n";
++				$conf .= "auth_param basic children {$ntlm_proc}\n";
++				$conf .= "auth_param basic credentialsttl 1 minute\n";
++				break;
+ 		}
+ 		if ($auth_method != 'cp') {
+ 		$conf .= <<< EOD
+diff --git a/squid_auth.xml b/squid_auth.xml
+index eb47778..c4b8ba1 100644
+--- squid_auth.xml
++++ squid_auth.xml
+@@ -89,6 +89,7 @@
+ 				<option><name>LDAP</name><value>ldap</value></option>
+ 				<option><name>RADIUS</name><value>radius</value></option>
+ 				<option><name>Captive Portal</name><value>cp</value></option>
++				<option><name>Winbind NTLM</name><value>ntlm</value></option>
+ 			</options>
+ 			<onchange>on_auth_method_changed()</onchange>
+ 		</field>
+@@ -165,6 +166,32 @@
+ 			<rows>5</rows>
+ 			<encoding>base64</encoding>
+ 		</field>
++		<field>
++		    <name>Squid Authentication NTLM Settings</name>
++		    <type>listtopic</type>
++		</field>
++		<field>
++		    <fielddescr>NTLMSSP Negotiate</fielddescr>
++		    <fieldname>ntlmssp</fieldname>
++		    <description>Use the NTLMSSP Negotiate packet (Transparent authentication in Windows Domain)</description>
++		    <type>checkbox</type>
++		    <default_value>on</default_value>
++		</field>
++		<field>
++		    <fielddescr>NTLMSSP Auth processes</fielddescr>
++		    <fieldname>ntlm_proc</fieldname>
++		    <description>The number of authenticator processes to spawn. If many authentications are expected within a short timeframe, increase this number accordingly.</description>
++		    <type>input</type>
++		    <size>40</size>
++		    <default_value>20</default_value>
++		</field>
++		<field>
++		    <fielddescr>NTLM Default Domain</fielddescr>
++		    <fieldname>ntlm_domain</fieldname>
++		    <description>Set the default domain for use in ntlm authentication</description>
++		    <type>input</type>
++		    <size>50</size>
++		</field>	
+ 		<field>
+ 			<name>Squid Authentication LDAP Settings</name>
+ 			<type>listtopic</type>
+diff --git a/squid_js.inc b/squid_js.inc
+index 02130ba..7461a75 100644
+--- squid_js.inc
++++ squid_js.inc
+@@ -66,6 +66,9 @@ function on_auth_method_changed() {
+ 	$('#auth_ttl').prop("disabled", true);
+ 	$('#unrestricted_auth').prop("disabled", true);
+ 	$('#no_auth_hosts').prop("disabled", true);
++	$('#ntlmssp').prop("disabled", true);
++	$('#ntlm_proc').prop("disabled", true);
++	$('#ntlm_domain').prop("disabled", true);
+ }
+ //]]>
+ </script>
+@@ -97,6 +100,9 @@ function on_auth_method_changed() {
+ 		$('#auth_ttl').prop("disabled", true);
+ 		$('#unrestricted_auth').prop("disabled", true);
+ 		$('#no_auth_hosts').prop("disabled", true);
++		$('#ntlmssp').prop("disabled", true);
++		$('#ntlm_proc').prop("disabled", true);
++		$('#ntlm_domain').prop("disabled", true);
+ 	} else {
+ 		$('#auth_prompt').prop("disabled", false);
+ 		$('#auth_processes').prop("disabled", false);
+@@ -118,6 +124,9 @@ function on_auth_method_changed() {
+ 		$('#ldap_basedomain').prop("disabled", true);
+ 		$('#ldap_noreferrals').prop("disabled", true);
+ 		$('#radius_secret').prop("disabled", true);
++		$('#ntlmssp').prop("disabled", true);
++		$('#ntlm_proc').prop("disabled", true);
++		$('#ntlm_domain').prop("disabled", true);
+ 		break;
+ 	case 'ldap':
+ 		$('#auth_server').prop("disabled", false);
+@@ -131,6 +140,9 @@ function on_auth_method_changed() {
+ 		$('#ldap_basedomain').prop("disabled", false);
+ 		$('#ldap_noreferrals').prop("disabled", false);
+ 		$('#radius_secret').prop("disabled", true);
++		$('#ntlmssp').prop("disabled", true);
++		$('#ntlm_proc').prop("disabled", true);
++		$('#ntlm_domain').prop("disabled", true);
+ 		break;
+ 	case 'radius':
+ 		$('#auth_server').prop("disabled", false);
+@@ -144,6 +156,9 @@ function on_auth_method_changed() {
+ 		$('#ldap_basedomain').prop("disabled", true);
+ 		$('#ldap_noreferrals').prop("disabled", true);
+ 		$('#radius_secret').prop("disabled", false);
++		$('#ntlmssp').prop("disabled", true);
++		$('#ntlm_proc').prop("disabled", true);
++		$('#ntlm_domain').prop("disabled", true);		
+ 		break;
+ 	case 'cp':
+ 		$('#auth_server').prop("disabled", true);
+@@ -162,7 +177,29 @@ function on_auth_method_changed() {
+ 		$('#auth_ttl').prop("disabled", false);
+ 		$('#unrestricted_auth').prop("disabled", true);
+ 		$('#no_auth_hosts').prop("disabled", true);
++		$('#ntlmssp').prop("disabled", true);
++		$('#ntlm_proc').prop("disabled", true);
++		$('#ntlm_domain').prop("disabled", true);		
+ 		break;
++	case 'ntlm':
++		$('#auth_server').prop("disabled", true);
++		$('#auth_server_port').prop("disabled", true);
++		$('#ldap_user').prop("disabled", true);
++		$('#ldap_version').prop("disabled", true);
++		$('#ldap_userattribute').prop("disabled", true);
++		$('#ldap_filter').prop("disabled", true);
++		$('#ldap_pass').prop("disabled", true);
++		$('#ldap_basedomain').prop("disabled", true);
++		$('#radius_secret').prop("disabled", true);
++		$('#auth_prompt').prop("disabled", true);
++		$('#auth_processes').prop("disabled", true);
++		$('#auth_ttl').prop("disabled", true);
++		$('#unrestricted_auth').prop("disabled", true);
++		$('#no_auth_hosts').prop("disabled", false);
++		$('#ntlmssp').prop("disabled", false);
++		$('#ntlm_proc').prop("disabled", false);
++		$('#ntlm_domain').prop("disabled", false);
++		break;		
+ 	}
+ }
+ //]]>
