@@ -53,7 +53,7 @@ done
 mkdir -p /usr/local/etc/pkg/repos
 cat <<EOF > /usr/local/etc/pkg/repos/pf2ad.conf
 pf2ad: {
-    url: "https://pkg.pf2ad.com/pfsense/2.5.2/amd64/",
+    url: "https://pkg.pf2ad.com/pfsense/2.5.0/amd64/",
     mirror_type: "https",
     enabled: yes,
     priority: 100
