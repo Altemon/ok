@@ -31,8 +31,8 @@ if [ -f "/etc/samba.patch.version" ]; then
 fi
 
 # Verifica versao pfSense
-#if [ "$(cat /etc/version)" != "2.5.2-RELEASE" ]; then
-#    echo "ERROR: You need the pfSense version 2.5.0 to apply this script"
+#if [ "$(cat /etc/version)" != "2.6.0-RELEASE" ]; then
+#    echo "ERROR: You need the pfSense version 2.6.0 to apply this script"
 #    exit 2
 #fi
 
@@ -53,7 +53,7 @@ done
 mkdir -p /usr/local/etc/pkg/repos
 cat <<EOF > /usr/local/etc/pkg/repos/pf2ad.conf
 pf2ad: {
-    url: "https://pkg.pf2ad.com/pfsense/2.5.2/amd64/",
+    url: "https://pkg.pf2ad.com/pfsense/2.6.0/amd64/",
     mirror_type: "https",
     enabled: yes,
     priority: 100
